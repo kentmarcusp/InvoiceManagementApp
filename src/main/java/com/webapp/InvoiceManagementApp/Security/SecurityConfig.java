@@ -1,64 +1,49 @@
 package com.webapp.InvoiceManagementApp.Security;
 
-import com.webapp.InvoiceManagementApp.Service.CustomerService;
-import jakarta.transaction.Transactional;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.Customizer;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfiguration;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
-import static org.springframework.boot.autoconfigure.security.servlet.PathRequest.toH2Console;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
-@AllArgsConstructor
 @EnableWebSecurity
-//maybe remove the websecurityconf?
+@RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final CustomerService customerService;
-    private final BCryptPasswordEncoder bCryptPasswordEncoder;
+    private final JwtAuthenticationProvider jwtAuthenticationProvider;
+    private final JwtTokenFilter jwtTokenFilter;
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        return http
-                .csrf(csrf -> csrf.ignoringRequestMatchers(toH2Console()))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers( "/api/**").permitAll()
-                        .requestMatchers( "/registration").permitAll()
-                        .requestMatchers(toH2Console()).permitAll()
-                        .anyRequest()
-                        .authenticated()
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http.csrf().disable()
+            .authorizeHttpRequests()
+            .requestMatchers("/api/registration/login").permitAll()
+            .requestMatchers("/api/registration").permitAll()
+            .anyRequest().authenticated()
+            .and()
+            .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
 
-                )
-                // allows same origin based auth access
-                .csrf().disable()
-                //.headers(headers -> headers.frameOptions().sameOrigin())
-                //.httpBasic(Customizer.withDefaults())
-                .build();
+        http.addFilterBefore(jwtTokenFilter, UsernamePasswordAuthenticationFilter.class);
+        return http.build();
     }
-
-    //@Override
-/*
-    public void configure(AuthenticationManagerBuilder auth) throws Exception {
-        auth.authenticationProvider(daoAuthenticationProvider());
-    }
-*/
 
     @Bean
-    public DaoAuthenticationProvider daoAuthenticationProvider() {
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
-        provider.setPasswordEncoder(bCryptPasswordEncoder);
-        provider.setUserDetailsService(customerService);
-
-        return provider;
+    public AuthenticationManager authenticationManager(
+        AuthenticationConfiguration authenticationConfiguration
+    ) throws Exception {
+        return authenticationConfiguration.getAuthenticationManager();
     }
 
+    @Autowired
+    void registerProvider(AuthenticationManagerBuilder auth) {
+        auth.authenticationProvider(jwtAuthenticationProvider);
+    }
 }
